@@ -6,3 +6,4 @@
 *.tsv
 *.json
 *notebook-checkpoint.ipynb
+*.tmp
