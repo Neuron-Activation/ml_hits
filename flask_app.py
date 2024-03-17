@@ -13,13 +13,13 @@ def home():
 def train():
     dataset = request.json['dataset']
     model.train(dataset)
-    return 'Model trained successfully'
+    return 'Model trained successfully\n'
 
 @app.route('/predict', methods=['POST'])
 def predict():
     dataset = request.json['dataset']
     prediction = model.make_prediction(dataset)
-    return {'prediction': prediction}
+    return 'Predictions successfully saved\n'
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
