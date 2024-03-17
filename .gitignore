@@ -7,3 +7,4 @@
 *.json
 *notebook-checkpoint.ipynb
 *.tmp
+*pyc
