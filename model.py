@@ -95,6 +95,10 @@ class My_Classifier_Model:
 
              self.logger.info(f'Точность базового классификатора на валидационных данных: {base_accuracy}')
              self.logger.info(f'Точность модели CatBoost на валидационных данных: {accuracy}')
+             
+             model_dir = './data/model/'
+             if not os.path.exists(model_dir):
+                 os.makedirs(model_dir)
 
              with open('./data/model/base_model.pkl', 'wb') as f:
                  pickle.dump(self.base_model, f)
