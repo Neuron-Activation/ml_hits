@@ -5,3 +5,4 @@
 *.tfevents
 *.tsv
 *.json
+*notebook-checkpoint.ipynb
