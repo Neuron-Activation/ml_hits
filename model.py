@@ -10,9 +10,20 @@ import logging
 import argparse
 import os
 import pickle
+import warnings
 
 
 logging.basicConfig(filename='./data/log_file.log', level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Функция для записи предупреждений в файл логов
+def warn_with_log(message, category, filename, lineno, file=None, line=None):
+    log = logging.getLogger(__name__)
+    log.warning(f'{filename}:{lineno}: {category.__name__}: {message}')
+
+# Перенаправление предупреждений в файл логов
+warnings.showwarning = warn_with_log
+warnings.filterwarnings('always')  # Всегда выводить предупреждения
 
 class My_Classifier_Model:
     def __init__(self):
@@ -56,75 +67,80 @@ class My_Classifier_Model:
         return df
 
     def train(self, train_dataset):
-        df_train = pd.read_csv(train_dataset)
-        df_train = self.preprocess_data(df_train)
+        try:
+             df_train = pd.read_csv(train_dataset)
+             df_train = self.preprocess_data(df_train)
+             listTransported = [False, True]
+             mapTransported = {i: listTransported.index(i) for i in listTransported}
+             df_train['Transported'] = df_train['Transported'].map(mapTransported)
 
-        listTransported = [False, True]
-        mapTransported = {i: listTransported.index(i) for i in listTransported}
-        df_train['Transported'] = df_train['Transported'].map(mapTransported)
+             df_train = df_train.drop(columns=["PassengerId"])
 
-        df_train = df_train.drop(columns=["PassengerId"])
+             X = df_train.drop('Transported', axis=1)
+             y = df_train['Transported']
 
-        X = df_train.drop('Transported', axis=1)
-        y = df_train['Transported']
+             X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+             self.base_model.fit(X_train, y_train)
 
-        self.base_model.fit(X_train, y_train)
+             cat_features = ['HomePlanet', 'CryoSleep', 'Destination', 'VIP', 'Deck', 'Side']
+             self.model.fit(X_train, y_train, cat_features=cat_features)
 
-        cat_features = ['HomePlanet', 'CryoSleep', 'Destination', 'VIP', 'Deck', 'Side']
-        self.model.fit(X_train, y_train, cat_features=cat_features)
+             base_predictions = self.base_model.predict(X_val)
+             base_accuracy = accuracy_score(y_val, base_predictions)
 
-        base_predictions = self.base_model.predict(X_val)
-        base_accuracy = accuracy_score(y_val, base_predictions)
-
-        predictions = self.model.predict(X_val)
-        accuracy = accuracy_score(y_val, predictions)
+             predictions = self.model.predict(X_val)
+             accuracy = accuracy_score(y_val, predictions)
 
 
-        self.logger.info(f'Точность базового классификатора на валидационных данных: {base_accuracy}')
-        self.logger.info(f'Точность модели CatBoost на валидационных данных: {accuracy}')
+             self.logger.info(f'Точность базового классификатора на валидационных данных: {base_accuracy}')
+             self.logger.info(f'Точность модели CatBoost на валидационных данных: {accuracy}')
 
-        with open('./model/base_model.pkl', 'wb') as f:
-            pickle.dump(self.base_model, f)
+             with open('./data/model/base_model.pkl', 'wb') as f:
+                 pickle.dump(self.base_model, f)
 
-        with open('./model/catboost_model.pkl', 'wb') as f:
-            pickle.dump(self.model, f)
+             with open('./data/model/catboost_model.pkl', 'wb') as f:
+                 pickle.dump(self.model, f)
 
-        logging.info("Модель успешно обучена и артефакты сохранены в ./model/")
+             self.logger.info("Модель успешно обучена и артефакты сохранены в ./data/model/")
+        except Exception as e:
+             self.logger.error(f"Ошибка при обучении модели: {str(e)}")
 
     def make_prediction(self, test_dataset):
-        df_test = pd.read_csv(test_dataset)
-
-        df_test = self.preprocess_data(df_test)
-
-        passenger_ids = df_test['PassengerId'].copy()
-
-        df_test = df_test.drop(columns=["PassengerId"])
         
-        base_model_path = './model/base_model.pkl'
-        catboost_model_path = './model/catboost_model.pkl'
-        if not os.path.exists(base_model_path) or not os.path.exists(catboost_model_path):
-            self.logger.error(f'Ошибка: Файлы моделей не найдены ({base_model_path}, {catboost_model_path})')
-            return
+        try: 
+             df_test = pd.read_csv(test_dataset)
+
+             df_test = self.preprocess_data(df_test)
+
+             passenger_ids = df_test['PassengerId'].copy()
+
+             df_test = df_test.drop(columns=["PassengerId"])
         
-        with open('./model/base_model.pkl', 'rb') as f:
-            self.base_model = pickle.load(f)
-
-        with open('./model/catboost_model.pkl', 'rb') as f:
-            self.model = pickle.load(f)
-
-        base_test_predictions = self.base_model.predict(df_test)
-        model_test_predictions = self.model.predict(df_test)
-
-        base_test_predictions = (base_test_predictions == 1)
-        model_test_predictions = (model_test_predictions == 1)
+             base_model_path = './data/model/base_model.pkl'
+             catboost_model_path = './data/model/catboost_model.pkl'
+             if not os.path.exists(base_model_path) or not os.path.exists(catboost_model_path):
+                 self.logger.error(f'Ошибка: Файлы моделей не найдены ({base_model_path}, {catboost_model_path})')
+                 return
         
-        model_submission = pd.DataFrame({'PassengerId': passenger_ids, 'Transported': model_test_predictions})
-        model_submission.to_csv('./data/results.csv', index=False)
-        self.logger.info('Файл model_submission.csv успешно сохранен.')
+             with open('./data/model/base_model.pkl', 'rb') as f:
+                 self.base_model = pickle.load(f)
 
-        logging.info("Прогнозы успешно сохранены в ./data/results.csv")
+             with open('./data/model/catboost_model.pkl', 'rb') as f:
+                 self.model = pickle.load(f)
+
+             base_test_predictions = self.base_model.predict(df_test)
+             model_test_predictions = self.model.predict(df_test)
+
+             base_test_predictions = (base_test_predictions == 1)
+             model_test_predictions = (model_test_predictions == 1)
+        
+             model_submission = pd.DataFrame({'PassengerId': passenger_ids, 'Transported': model_test_predictions})
+             model_submission.to_csv('./data/results.csv', index=False)
+             
+             self.logger.info("Прогнозы успешно сохранены в ./data/results.csv")
+        except Exception as e: 
+             self.logger.error(f"Ошибка при выполнении предсказаний: {str(e)}")
 
 def main():
     parser = argparse.ArgumentParser(description="Обучение и предсказание с использованием модели")
